@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List
 import os
 import uvicorn
 
@@ -13,9 +15,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/analytics")
-def get_analytics():
-    return {"tips": 1000, "messages": 42}
+# Mock database
+chat_histories = {}
+
+class ChatRequest(BaseModel):
+    user_id: str
+    model: str
+    message: str
 
 @app.get("/users")
 def get_users():
@@ -24,19 +30,21 @@ def get_users():
         {"id": "456", "name": "John Smith", "joined": "2024-01-01"},
     ]
 
+@app.get("/analytics")
+def get_analytics():
+    return {"tips": 1000, "messages": 42}
+
 @app.post("/chat")
-async def chat(payload: dict):
-    message = payload.get("message", "")
-    model = payload.get("model", "Lana")
-    reply = f"[{model}]: I received your message - '{message}'."
+def chat(request: ChatRequest):
+    reply = f"[{request.model}]: I received your message - '{request.message}'."
+    history = chat_histories.setdefault(request.user_id, [])
+    history.append({"from": "user", "text": request.message})
+    history.append({"from": request.model, "text": reply})
     return {"reply": reply}
 
 @app.get("/history/{user_id}")
 def get_history(user_id: str):
-    return [
-        {"user": "Hello", "model": "Hi there!", "timestamp": "2023-01-01T12:00:00Z"},
-        {"user": "How are you?", "model": "I'm great, thanks!", "timestamp": "2023-01-01T12:05:00Z"}
-    ]
+    return chat_histories.get(user_id, [])
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
